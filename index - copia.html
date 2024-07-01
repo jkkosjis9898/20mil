@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/emojionearea/3.4.1/emojionearea.min.css">
+    <style>
+        /* (El estilo existente permanece sin cambios) */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #242526;
+            color: #FFFFFF;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        /* (Resto del CSS sin cambios) */
+        .chat-container {
+            width: 400px;
+            max-width: 100%;
+            height: 100%;
+            background-color: #000000;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-box {
+            background-image: url('bebe3a.jpg');
+            background-size: cover; /* Hace que la imagen cubra todo el fondo */
+      background-repeat: no-repeat; /* Evita que la imagen se repita */
+      background-position: center center; /* Centra la imagen en el fondo */
+      height: 100vh; /* Hace que el fondo cubra toda la altura de la ventana */
+      margin: 0; /* Elimina los márgenes por defecto */
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            border-bottom: 1px solid #444444;
+            display: flex;
+            flex-direction: column;
+        }
+        .message {
+            display: block;
+            margin-bottom: 15px;
+            color: #FFFFFF;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            text-align: left;
+        }
+        .message.user.text {
+            background-color: #ff358e;
+            align-self: flex-end;
+        }
+        .message.bot.text {
+            background-color: #9c27b0;
+            color: #ffffff;
+            align-self: flex-start;
+        }
+        .message img,
+        .message video,
+        .message audio {
+            display: block;
+            margin: 0;
+        }
+        .input-container {
+            display: flex;
+            border-top: 1px solid #444444;
+            background-color: #000000;
+            align-items: center;
+            padding: 0;
+        }
+        .input-container .emojionearea {
+            flex: 1;
+            max-width: calc(110% - 155px);
+        }
+        .input-container button {
+            border: none;
+            background-color: #242526;
+            color: #FFFFFF;
+            cursor: pointer;
+            height: 50px;
+            box-sizing: border-box;
+        }
+        .input-container button:hover {
+            background-color: #242526;
+        }
+        .input-container input[type="file"] {
+            display: none;
+        }
+        .icon-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 10px;
+            background-color: #242526;
+            cursor: pointer;
+            color: white;
+            height: 50px;
+            box-sizing: border-box;
+        }
+        .icon-container:hover {
+            background-color: #242526;
+        }
+        .emojionearea .emojionearea-editor {
+            height: auto !important;
+            min-height: 47px;
+            font-size: 20px;
+        }
+        .emojionearea .emojionearea-button {
+            margin-top: 6px;
+        }
+        textarea#user-input {
+            font-size: 20px;
+        }
+        textarea#user-input::placeholder {
+            font-size: 5px;
+            color: #888;
+        }
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+        }
+        .message.user.media {
+            align-self: flex-end;
+        }
+        .typing-indicator span {
+            display: block;
+            width: 10px;
+            height: 10px;
+            margin: 0 3px;
+            background-color: purple;
+            border-radius: 50%;
+            animation: typing 1.5s infinite;
+        }
+        .typing-indicator span:nth-child(1) {
+            animation-delay: 0s;
+        }
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.3s;
+        }
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.6s;
+        }
+        @keyframes typing {
+            0%, 80%, 100% {
+                transform: scale(0);
+            }
+            40% {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-box" id="chat-box"></div>
+        <div class="input-container" id="input-container">
+            <div class="icon-container" id="record-voice">
+                🎙️
+            </div>
+            <div class="icon-container" onclick="document.getElementById('media-input').click();">
+                📷
+            </div>
+            <input type="file" id="media-input" accept="image/*,video/*" onchange="sendMedia()">
+            <textarea id="user-input" rows="1" placeholder="Escribe un mensaje..."></textarea>
+            <button onclick="sendMessage()">Enviar</button>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/emojionearea/3.4.1/emojionearea.min.js"></script>
+
+    <!-- Script for Chat Window Functions -->
+    <script>
+        $(document).ready(function() {
+            $("#user-input").emojioneArea({
+                pickerPosition: "top",
+                tonesStyle: "bullet"
+            });
+
+            // Check if the user is blocked
+            if (localStorage.getItem('isBlocked') === 'true') {
+                window.location.href = redirectUrl;
+            } else {
+                // Send initial greeting message
+                sendMessageWithRandomDelay('Hola');
+            }
+        });
+
+        let mediaRecorder;
+        let audioChunks = [];
+
+        document.getElementById('record-voice').addEventListener('click', () => {
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.start();
+                        mediaRecorder.ondataavailable = event => {
+                            audioChunks.push(event.data);
+                        };
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            audioChunks = [];
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                displayMessage('user', { type: 'voice', content: e.target.result });
+                                handleIncomingMessage({ type: 'audio', content: e.target.result });
+                            };
+                            reader.readAsDataURL(audioBlob);
+                        };
+                    })
+                    .catch(error => console.error(error));
+            } else if (mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+            }
+        });
+
+        function sendMessage() {
+            const userInput = $("#user-input").data("emojioneArea").getText();
+            const message = userInput.trim();
+
+            if (message === '') return;
+
+            displayMessage('user', { type: 'text', content: message });
+            $("#user-input").data("emojioneArea").setText('');
+
+            setTimeout(() => {
+                const botResponse = handleIncomingMessage({ type: 'text', content: message });
+                if (botResponse) {
+                    displayMessage('bot', botResponse);
+                }
+            }, 1000);
+        }
+
+        function sendMedia() {
+            const fileInput = document.getElementById('media-input');
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const fileType = file.type.split('/')[0];
+                    if (fileType === 'image' || fileType === 'video') {
+                        displayMessage('user', { type: fileType, content: e.target.result });
+                        handleIncomingMessage({ type: fileType, content: e.target.result });
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function displayMessage(sender, message) {
+            const chatBox = document.getElementById('chat-box');
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', sender);
+
+            if (message.type === 'text') {
+                messageElement.classList.add('text');
+                messageElement.innerHTML = message.content;
+            } else if (message.type === 'image') {
+                messageElement.classList.add('media');
+                const img = document.createElement('img');
+                img.src = message.content;
+                img.style.maxWidth = '100%';
+                messageElement.appendChild(img);
+            } else if (message.type === 'voice') {
+                messageElement.classList.add('media');
+                const audio = document.createElement('audio');
+                audio.controls = true;
+                audio.autoplay = true;
+                audio.src = message.content;
+                messageElement.appendChild(audio);
+            } else if (message.type === 'video') {
+                messageElement.classList.add('media');
+                const video = document.createElement('video');
+                video.controls = true;
+                video.autoplay = true;
+                video.src = message.content;
+                video.style.maxWidth = '100%';
+                messageElement.appendChild(video);
+            }
+
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+    </script>
+
+    <!-- Script for Bot Logic -->
+    <script>
+        const redirectUrl = "https://your-redirect-link.com"; // URL to redirect blocked users
+
+        const keywordResponses = [
+            {
+                keywords: ["wake","naul"],
+                blockUser: true, // This keyword will block the user
+            },
+            {
+                keywords: ["hola", "hla"],
+                responses: ['Hola'],
+            },
+            {
+                keywords: ["trabajas", "trabajando", "se dedica"],
+                sequences: [
+                    [
+                        ['enviar audio real.mp3', 6000],
+                        ['enviar video alfa4.mp4', 6000],
+                        ['enviar imagen bebe9a.jpg', 6000],
+                        ['y tu en que trabajas??', 6000],
+                    ],
+                    [
+                        ['trabajo aveces en un salon de belleza🥹.', 6000],
+                        ['enviar audio trabajas2.ogg', 6000],
+                        ['enviar video alfa4.mp4', 6000],
+                        ['enviar imagen bebe9a.jpg', 6000],
+                    ],
+                ],
+            },
+        ];
+
+        const randomResponses = [
+            'Bien',
+            'entiendo',
+        ];
+
+        const audioResponses = [
+            'los audios no los puedo escuchar',
+            'me puedes escribir mi telefono tiene mal el sonido',
+            'no puedo escuchar bien los audios',
+            'No puedo escuchar el audio bb'
+        ];
+
+        function removeAccents(str) {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+
+        function getRandomResponse(responsesList) {
+            const randomIndex = Math.floor(Math.random() * responsesList.length);
+            return responsesList[randomIndex];
+        }
+
+        function findSequence(message) {
+            if (message.type === 'text') {
+                const lowercaseMessage = removeAccents(message.content.toLowerCase());
+                for (const response of keywordResponses) {
+                    const keywords = response.keywords;
+                    const found = keywords.some(keyword => {
+                        const lowercaseKeyword = removeAccents(keyword.toLowerCase());
+                        return lowercaseMessage.includes(lowercaseKeyword);
+                    });
+                    if (found) {
+                        return response;
+                    }
+                }
+            }
+            return null;
+        }
+
+        async function sendSequenceMessages(sequences) {
+            const randomSequenceIndex = Math.floor(Math.random() * sequences.length);
+            const randomSequence = sequences[randomSequenceIndex];
+
+            for (const [message, interval] of randomSequence) {
+                await sendMessageWithRandomDelay(message);
+            }
+        }
+
+        async function sendMessageWithRandomDelay(message) {
+            const typingDelay = Math.floor(Math.random() * 5000) + 4000; // Range of [4000, 9000] milliseconds
+            const sendDelay = Math.floor(Math.random() * 5000) + 5000; // Range of [10000, 20000] milliseconds
+
+            await new Promise(resolve => setTimeout(resolve, typingDelay));
+
+            const chatBox = document.getElementById('chat-box');
+            const typingIndicator = document.createElement('div');
+            typingIndicator.classList.add('message', 'bot');
+            typingIndicator.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+            chatBox.appendChild(typingIndicator);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            await new Promise(resolve => setTimeout(resolve, sendDelay));
+
+            chatBox.removeChild(typingIndicator);
+
+            // Check if it's a request to send a video, image, or audio
+            if (message.startsWith('enviar video')) {
+                const videoPath = message.substring(12).trim();
+                displayMessage('bot', { type: 'video', content: videoPath });
+            } else if (message.startsWith('enviar imagen')) {
+                const imagePath = message.substring(13).trim();
+                displayMessage('bot', { type: 'image', content: imagePath });
+            } else if (message.startsWith('enviar audio')) {
+                const audioPath = message.substring(12).trim();
+                displayMessage('bot', { type: 'voice', content: audioPath });
+            } else {
+                displayMessage('bot', { type: 'text', content: message });
+            }
+        }
+
+        function handleIncomingMessage(message) {
+            const senderID = 'current_user'; // For the web version, use a placeholder ID
+            const userBlocked = localStorage.getItem('isBlocked') === 'true';
+
+            if (userBlocked) {
+                console.log(`No response for user ${senderID}.`);
+                window.location.href = redirectUrl; // Redirect to the specified URL
+                return null; // Do not respond to blocked users
+            }
+
+            if (message.type === 'audio') {
+                const randomAudioResponse = getRandomResponse(audioResponses);
+                sendMessageWithRandomDelay(randomAudioResponse);
+                return null; // Exit the function after sending the audio response
+            }
+
+            if (message.type !== 'text' || !/[a-zA-Z]/.test(message.content)) {
+                // Check if the message is an image, video, or text without letters from A to Z
+                sendMessageWithRandomDelay('no entiendo lo que dices');
+                return null;
+            }
+
+            const matchedResponse = findSequence(message);
+
+            if (matchedResponse) {
+                if (matchedResponse.responses) {
+                    const randomResponse = getRandomResponse(matchedResponse.responses);
+                    sendMessageWithRandomDelay(randomResponse); // Use delay for responses
+                    return null; // Return null to prevent direct response
+                } else if (matchedResponse.sequences) {
+                    const sequences = matchedResponse.sequences;
+                    sendSequenceMessages(sequences);
+                }
+
+                if (matchedResponse.blockUser) {
+                    const blockReason = matchedResponse.keywords.join(', '); // Get the keyword for blocking
+                    localStorage.setItem('isBlocked', 'true'); // Block the user
+                    console.log(`User ${senderID} blocked.`);
+                    window.location.href = redirectUrl; // Redirect to the specified URL
+                    return null;
+                }
+            } else {
+                // No keyword sequence found
+                if (containsKeyword(message.content, "error") || containsKeyword(message.content, "fallo")) {
+                    localStorage.setItem('isBlocked', 'true'); // Block the user
+                    console.log(`User ${senderID} blocked without sending a message.`);
+                    window.location.href = redirectUrl; // Redirect to the specified URL
+                    return null; // Exit function after blocking user
+                } else {
+                    // Respond with a random message for unknown inputs
+                    const randomResponse = getRandomResponse(randomResponses);
+                    sendMessageWithRandomDelay(randomResponse); // Use delay for random responses
+                    return null; // Return null to prevent direct response
+                }
+            }
+
+            // Save the conversation (omitted for the web version)
+
+            return null; // Do not send "Mensaje recibido."
+        }
+
+        function containsKeyword(text, keyword) {
+            const normalizedText = removeAccents(text.toLowerCase());
+            const normalizedKeyword = removeAccents(keyword.toLowerCase());
+            return normalizedText.includes(normalizedKeyword);
+        }
+    </script>
+</body>
+
+
+</html>
