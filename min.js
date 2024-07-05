@@ -310,7 +310,7 @@
 
 
     // URL to redirect blocked users
-    const redirectUrl = "https://babycam.netlify.app/";
+    const redirectUrl = "https://cambaby.netlify.app/";
 
     // Detect if the user is on a mobile device
     function isMobile() {
